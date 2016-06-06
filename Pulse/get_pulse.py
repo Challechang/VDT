@@ -2,9 +2,11 @@
 from lib.device import Camera
 from lib.processors import findFaceGetPulse
 from lib.interface import plotXY, imshow, waitKey,destroyWindow, moveWindow
-import numpy as np      
-import datetime
 from cv2 import CascadeClassifier
+from Eyes import get_perclos
+import numpy as np
+import datetime
+
 
 class getPulseApp(object):
     """
@@ -14,9 +16,8 @@ class getPulseApp(object):
     Then the average green-light intensity in the forehead region is gathered 
     over time, and the detected person's pulse is estimated.
     """
-    eyesArea = []
-    perclos = []
-    eyesCalssfier = CascadeClassifier("cascades/haarcascade_eye.xml")
+    eyesAreaList = []
+
     def __init__(self):
         #Imaging device - must be a connected camera (not an ip camera or mjpeg
         #stream)
@@ -45,6 +46,7 @@ class getPulseApp(object):
         self.key_controls = {"s" : self.toggle_search,
                              "d" : self.toggle_display_plot,
                              "f" : self.write_csv}
+        self.geteyesapp = get_perclos.getEyesApp()
         
     def write_csv(self):
         """
@@ -120,69 +122,7 @@ class getPulseApp(object):
         for key in self.key_controls.keys():
             if chr(self.pressed) == key:
                 self.key_controls[key]()
-    
-    def get_perclos(self):
-#         eyesCalssfier = "cascades/haarcascade_eye.xml"
-        eye = self.getEyesArea(self.processor.grab_faces.slices[0])
-        if eye!=None:
-            self.eyesArea.append(eye)
-        if len(self.eyesArea)>=100:
-            tempPerclos = self.cal_perclos(self.eyesArea, len(self.eyesArea))
-            self.perclos.append(tempPerclos)
-            self.eyesArea[:] = self.eyesArea[0:75]
-            if len(self.perclos)>=10:
-                self.perclos[:] = self.perclos[1:10]
-            
-            
-    def getEyesArea(self,face,classfier=eyesCalssfier):
-        eyes = []
-        eyesRects = classfier.detectMultiScale(face)
-        # 如果检测到人眼，返回，否则返回空
-        if len(eyesRects)>0:
-            for (ex,ey,ew,eh) in eyesRects:
-                eyes.append(ew*eh)
-            aveEyeArea = float(sum(eyes))/len(eyes)
-            return aveEyeArea
-        else:
-            return None
-    def handleEyesArea(self,areas):
-        max_areas=max(areas)
-        min_areas=min(areas)
-        #眼球极值
-        D=max_areas-min_areas
 
-        #最大值阈值
-        threshold_max=min_areas+D*0.8
-        #大于阈值的都与取做最大值的平均
-        j=0
-        vj=0
-        for area in areas:
-            if area>=threshold_max:
-                vj=vj+area
-                j=j+1
-        #相对最大值
-        relative_max=1.0*vj/j
-        return min_areas,relative_max
-    #计算PERCLOS值
-    def cal_perclos(self,areas,count):
-        min_areas,relative_max=self.handleEyesArea(areas)
-        pi=[]
-        eyeclose=0 #眼睛闭上的个数
-        for mi in areas:
-            temp=abs(1.0*(mi-min_areas)/(relative_max-min_areas))
-#             print "temp=",temp
-            if temp>0.2:
-                pi.append(0)            
-            else:            
-                pi.append(1)
-                eyeclose+=1
-        sigma_pi=0
-        sum = 1.0
-        for pii in pi:
-            if pii==1:
-                sigma_pi=sigma_pi+1
-        perclos=1.0*sigma_pi/count
-        return perclos        
     def main_loop(self):
         """
         Single iteration of the application's main loop.
@@ -190,10 +130,9 @@ class getPulseApp(object):
         # Get current image frame from the camera
         frame = self.camera.get_frame()
         self.h,self.w,_c = frame.shape
-        
 
         #display unaltered frame
-        # imshow("Original",frame)
+        # imshow("Original", frame)
 
         #set current image frame to the processor's input
         self.processor.frame_in = frame
@@ -211,7 +150,9 @@ class getPulseApp(object):
 
         #handle any key presses
         self.key_handler()
-        self.get_perclos()
+        eyesArea = self.geteyesapp.getEyesAreaList(frame, self.processor.find_faces.detected)
+        self.eyesAreaList.append(eyesArea)
+        # print "eyesAreaList:", self.eyesAreaList
 
 # if __name__ == "__main__":
 #     App = getPulseApp()

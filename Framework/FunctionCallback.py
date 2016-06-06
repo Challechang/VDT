@@ -6,13 +6,15 @@ import time
 import datetime
 import PIL.Image
 import PIL.ImageTk
-import numpy as np
 from tkFileDialog import askopenfilename
 from tkMessageBox import showerror
 from tkSimpleDialog import askstring
 from Pulse.get_pulse import *
+from Tools.switch_tool import SwithTool
 bufferFace = []
 app = getPulseApp()
+switchtool = SwithTool()
+
 def callOpenFile():
     filename = askopenfilename()
     if filename:
@@ -26,12 +28,13 @@ def callOpenFile():
 #         size = (int(videoCapture.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), 
 #         int(videoCapture.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
         #读帧
-        success,frame = videoCapture.read()
+        success, frame = videoCapture.read()
         while success:
-            cv2.imshow('frame',frame)
-            cv2.waitKey(5000/int(fps))
+            cv2.imshow('frame', frame)
+            cv2.waitKey(1)
             #读取下一帧
             success,frame = videoCapture.read()
+        cv2.destroyWindow("frame")
     else:
         showerror("error", "文件不存在!")
 def callCapVideo():
@@ -85,6 +88,7 @@ def capVideoThread(intervalTime):
         cv2.destroyAllWindows()
         time.sleep(intervalTime)
 
+
 def update_image(image_label, cv_capture,facesclassfier):
     app.main_loop()
     
@@ -94,12 +98,15 @@ def update_image(image_label, cv_capture,facesclassfier):
 #     if temp!=None:
 #         cv_image = temp[0]
 #     cv_image = cv2.resize(cv_image,(120,120),interpolation=cv2.INTER_CUBIC)
-    cv_image = cv2.resize(app.processor.grab_faces.slices[0],(120,120),interpolation=cv2.INTER_CUBIC)
+    cv_image = cv2.resize(app.processor.frame_in, (120,120),interpolation=cv2.INTER_CUBIC)
+    cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
     pil_image = PIL.Image.fromarray(cv_image)
     tk_image = PIL.ImageTk.PhotoImage(image=pil_image)
     image_label.configure(image=tk_image)
-    image_label._image_cache = tk_image  # avoid garbage collection
+    # image_label._image_cache = tk_image  # avoid garbage collection
     image_label.update()
+
+
 # 更新头像
 def update_all(root, image_label, cv_capture,facesclassfier):
     if root.quit_flag:
@@ -107,56 +114,60 @@ def update_all(root, image_label, cv_capture,facesclassfier):
     else:
         update_image(image_label, cv_capture,facesclassfier)
         image_label.after(0, func=lambda: update_all(root, image_label, cv_capture,facesclassfier))
-def updatePerclos(canvas,figure,y,length):
+
+
+def updateCurve(canvas, figure):
     #清空原图像
-    perclosPlot = figure.add_subplot(211)
-    perclosPlot.cla()
-    perclosPlot.set_title("PERCLOS",color="#FFFFFF")
-    perclosPlot.set_yticks([])
-#     tempx = []
-#     tempy = []
-#     leny = len(y)
-#     if leny>length:
-#         tempy[:] = y[0:length]
-#         if length>50:
-#             y[:] = y[1:leny]
-#     else:
-#         tempy[:] = y[0:leny]
-#         
-#     for i in range(0,len(tempy)):
-#         tempx.append(i)
-#     perclosPlot.plot(tempx,tempy)
-    if len(app.perclos)==0:
-        perclosPlot.plot(0)
+    toolPlot = figure.add_subplot(211)
+    toolPlot.cla()
+    toolPlot.set_yticks([])
+
+    if len(app.eyesAreaList)==0:
+        toolPlot.plot(0)
     else:
-        print app.perclos
-        perclosFFT = np.fft.fft(app.perclos)
-        perclosPlot.set_ylim(0,1)
+        # perclosFFT = np.fft.fft(app.perclos)
+        # perclosPlot.set_ylim(0, 1)
         
-        tempPerclos = int(sum(app.perclos)/len(app.perclos)*100)
-        perclosPlot.plot(app.perclos,label="perclos:"+str(tempPerclos)+"%")
-        perclosPlot.legend(loc="upper right")
+        # tempPerclos = int(sum(app.perclos)/len(app.perclos)*100)
+        # perclosPlot.plot(app.eyesAreaList,label="perclos:"+str(tempPerclos)+"%")
+        # 显示眼睛高度曲线
+        print "curshow:", switchtool.getCurShow()
+        if switchtool.getCurShow() == switchtool.showEyesHeight():
+            toolPlot.set_title("EyesHeight", color="#FFFFFF")
+            if (len(app.eyesAreaList)>300):
+                app.eyesAreaList[:] = app.eyesAreaList[1:301]
+            toolPlot.plot(app.eyesAreaList)
+            toolPlot.legend(loc="upper right")
+        # 显示percolos曲线
+        elif switchtool.getCurShow() == switchtool.showPerclos():
+            toolPlot.set_title("PERCLOS", color="#FFFFFF")
+            toolPlot.plot(app.geteyesapp.perclos)
+        # 显示嘴巴面积曲线
+        elif switchtool.getCurShow() == switchtool.showMouthArea():
+            toolPlot.set_title("MouthArea", color="#FFFFFF")
+            toolPlot.plot(app.geteyesapp.mouthareas)
     
     ppgPlot = figure.add_subplot(212)
     ppgPlot.cla()
     ppgPlot.set_yticks([])
-    ppgPlot.set_title("PPG",color="#FFFFFF")
+    ppgPlot.set_title("PPG", color="#FFFFFF")
 #     ppgPlot.set_xlim(1,50)
 #     ppgPlot.set_ylim(0,30000)
 #     ppgPlot.grid()   
     bmp = str(int(app.processor.show_bpm_text.bpm+0.5))
-    ppgPlot.plot(app.processor.measure_heart.fft,label="bpm:"+bmp)
+    ppgPlot.plot(app.processor.measure_heart.fft, label="bpm:"+bmp)
     ppgPlot.legend(loc="upper right")
     canvas.show()
- # 更新Perclos曲线图
-def updateCurve(root,canvas,figure,y,length=0):
+
+
+ #更新曲线图
+def updateCurveAll(root, canvas, figure):
     if root.quit_flag:
         root.destroy()
     else:
-        if length<=50:
-            length += 1
-        updatePerclos(canvas,figure,y,length)
-        canvas._tkcanvas.after(10,func=lambda:updateCurve(root, canvas,figure,y,length))
+        updateCurve(canvas, figure)
+        canvas._tkcanvas.after(10, func=lambda:updateCurveAll(root, canvas, figure))
+
 
 def updateWarnbar(canvas):
     canvas.create_oval((40,40,180,180),fill="red",outline="red",dash=(10,10))

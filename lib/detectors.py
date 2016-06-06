@@ -21,8 +21,8 @@ class cascadeDetection(Component):
     """
     
     def __init__(self, fn, 
-                 scaleFactor = 1.3, 
-                 minNeighbors = 4, 
+                 scaleFactor = 1.5,
+                 minNeighbors = 2,
                  minSize=(75, 75), 
                  flags = cv2.CASCADE_SCALE_IMAGE, 
                  persist = True, 
